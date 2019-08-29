@@ -141,6 +141,7 @@ module.exports = function(RED) {
         this.google = RED.nodes.getNode(n.google);
         this.calendar = n.calendar || 'primary';
         this.ongoing = n.ongoing || false;
+        this.current = n.current || false;
 
         if (!this.google || !this.google.credentials.accessToken) {
             this.warn(RED._("calendar.warn.no-credentials"));
@@ -166,20 +167,37 @@ module.exports = function(RED) {
                     node.status({fill:"red",shape:"ring",text:"calendar.status.invalid-calendar"});
                     return;
                 }
-                nextStartingEvent(node, cal, msg, function(err, ev) {
-                    if (err) {
-                        node.error(RED._("calendar.error.error", {error:err.toString()}),msg);
-                        node.status({fill:"red",shape:"ring",text:"calendar.status.failed"});
-                        return;
-                    }
-                    if (!ev) {
-                        node.error(RED._("calendar.error.no-event"),msg);
-                        node.status({fill:"red",shape:"ring",text:"calendar.status.no-event"});
-                    } else {
-                        sendEvent(node, ev, msg);
-                        node.status({});
-                    }
-                });
+                if (node.current) {
+                    allCurrentEvents(node, cal, msg, function(err, evs) {
+                        if (err) {
+                            node.error(RED._("calendar.error.error", {error:err.toString()}),msg);
+                            node.status({fill:"red",shape:"ring",text:"calendar.status.failed"});
+                            return;
+                        }
+                        if (!evs) {
+                            node.error(RED._("calendar.error.no-event"),msg);
+                            node.status({fill:"red",shape:"ring",text:"calendar.status.no-event"});
+                        } else {
+                            sendEvent(node, evs, msg);
+                            node.status({});
+                        }
+                    }); 
+                } else {
+                    nextStartingEvent(node, cal, msg, function(err, ev) {
+                        if (err) {
+                            node.error(RED._("calendar.error.error", {error:err.toString()}),msg);
+                            node.status({fill:"red",shape:"ring",text:"calendar.status.failed"});
+                            return;
+                        }
+                        if (!ev) {
+                            node.error(RED._("calendar.error.no-event"),msg);
+                            node.status({fill:"red",shape:"ring",text:"calendar.status.no-event"});
+                        } else {
+                            sendEvent(node, ev, msg);
+                            node.status({});
+                        }
+                    });
+                }
             });
         });
     }
@@ -270,6 +288,54 @@ module.exports = function(RED) {
                     node.google.request(request, handle_response);
                 } else {
                     cb(null, ev);
+                }
+            }
+        };
+        node.google.request(request, handle_response);
+    }
+
+    function allCurrentEvents(node, cal, msg, after, cb) {
+        if (typeof after === 'function') {
+            cb = after;
+            after = new Date();
+        }
+
+        var request = {
+            url: 'https://www.googleapis.com/calendar/v3/calendars/'+cal.id+'/events'
+        };
+        request.qs = {
+            orderBy: 'startTime',
+            singleEvents: true,
+            showDeleted: false,
+            timeMin: after.toISOString()
+        };
+        if (msg.payload) {
+            request.qs.q = RED.util.ensureString(msg.payload);
+        }
+        var handle_response = function(err, data) {
+            if (err) {
+                cb(RED._("calendar.error.error", {error:err.toString()}), null);
+            } else if (data.error) {
+                cb(RED._("calendar.error.error-details", {code:data.error.code, message:JSON.stringify(data.error.message)}), null);
+            } else {
+                var evs = [];
+                /* events ending after now and started before now or now 
+                 * ordered by startTime
+                 * so we find all current events
+                 */
+                for (var i = 0; i<data.items.length; i++) {
+                    var ev = data.items[i];
+                    var start = getEventDate(ev);
+                    var end = getEventDate(ev, 'end');
+                    if (start && start.getTime() <= after.getTime() && end.getTime() > after.getTime()) {
+                        evs.push(ev);
+                    }
+                }
+                if (evs.length <= 0 && data.hasOwnProperty('nextPageToken')) {
+                    request.qs.pageToken = data.nextPageToken;
+                    node.google.request(request, handle_response);
+                } else {
+                    cb(null, evs);
                 }
             }
         };
