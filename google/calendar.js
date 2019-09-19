@@ -523,7 +523,7 @@ module.exports = function(RED) {
         delete msg.error;
         var payload = msg.payload = {};
         if (Array.isArray(ev)){
-            var newEvs = []
+            /* var newEvs = []
             msg.titles = 'Multievent payload'
             msg.description = 'Multievent payload'
             ev.map(item => {
@@ -550,8 +550,8 @@ module.exports = function(RED) {
                     });
                 }
                 newEvsPayload.push(newEv)
-            })
-            payload = newEvs
+            }) */
+            payload = ev
         } else {
             if (ev.summary) {
                 payload.title = msg.title = ev.summary;
