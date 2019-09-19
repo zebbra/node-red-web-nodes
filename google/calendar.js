@@ -327,7 +327,7 @@ module.exports = function(RED) {
                     var ev = data.items[i];
                     var start = getEventDate(ev);
                     var end = getEventDate(ev, 'end');
-                    if (start && start.getTime() <= after.getTime() && end.getTime() > after.getTime()) {
+                    if (start && start.getTime() <= after.getTime() && end.getTime() >= after.getTime()) {
                         evs.push(ev);
                     }
                 }
