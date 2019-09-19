@@ -522,53 +522,85 @@ module.exports = function(RED) {
         }
         delete msg.error;
         var payload = msg.payload = {};
-        if (ev.summary) {
-            payload.title = msg.title = ev.summary;
-        }
-        if (ev.description) {
-            payload.description = msg.description = ev.description;
+        if (Array.isArray(ev)){
+            var newEvs = []
+            msg.titles = 'Multievent payload'
+            msg.description = 'Multievent payload'
+            ev.map(item => {
+                var newEv = {}
+                newEv.title = item.summary ? item.summary : ''
+                newEv.description = item.description ? item.description : ''
+                newEv.location = item.location ? item.location : ''
+                newEv.start = getEventDate(item) ? getEventDate(item) : ''
+                newEv.allDayEvent = (item.start && item.start.date) ? true : false
+                newEv.end = getEventDate(item, 'end') ? getEventDate(item, 'end') : ''
+
+                newEv.creator = item.creator ? {
+                    name: item.creator.displayName,
+                    email: item.creator.email,
+                } : ''
+
+                if (item.attendees) {
+                    newEv.attendees = [];
+                    item.attendees.map(i => {
+                        newEv.attendees.push({
+                            name: i.displayName,
+                            email: i.email
+                        });
+                    });
+                }
+                newEvsPayload.push(newEv)
+            })
+            payload = newEvs
         } else {
-            delete msg.description;
-        }
-        if (ev.location) {
-            /* intentionally the same object so that
-             * if a node modifies msg.location (for
-             * example by looking up
-             * msg.location.description and adding
-             * msg.location.{lat,lon} then both copies
-             * will be updated.
-             */
-            payload.location = msg.location = {
-                description: ev.location
-            };
-        } else {
-            delete msg.location;
-        }
-        var start = getEventDate(ev);
-        if (start) {
-            payload.start = start;
-        }
-        if (ev.start && ev.start.date) {
-            payload.allDayEvent = true;
-        }
-        var end = getEventDate(ev, 'end');
-        if (end) {
-            payload.end = end;
-        }
-        if (ev.creator) {
-            payload.creator = {
-                name: ev.creator.displayName,
-                email: ev.creator.email,
-            };
-        }
-        if (ev.attendees) {
-            payload.attendees = [];
-            ev.attendees.forEach(function (a) {
-                payload.attendees.push({
-                    name: a.displayName,
-                    email: a.email
+            if (ev.summary) {
+                payload.title = msg.title = ev.summary;
+            }
+            if (ev.description) {
+                payload.description = msg.description = ev.description;
+            } else {
+                delete msg.description;
+            }
+            if (ev.location) {
+                /* intentionally the same object so that
+                 * if a node modifies msg.location (for
+                 * example by looking up
+                 * msg.location.description and adding
+                 * msg.location.{lat,lon} then both copies
+                 * will be updated.
+                 */
+                payload.location = msg.location = {
+                    description: ev.location
+                };
+            } else {
+                delete msg.location;
+            }
+            var start = getEventDate(ev);
+            if (start) {
+                payload.start = start;
+            }
+            if (ev.start && ev.start.date) {
+                payload.allDayEvent = true;
+            }
+            var end = getEventDate(ev, 'end');
+            if (end) {
+                payload.end = end;
+            }
+            if (ev.creator) {
+                payload.creator = {
+                    name: ev.creator.displayName,
+                    email: ev.creator.email,
+                };
+            }
+            if (ev.attendees) {
+                payload.attendees = [];
+                ev.attendees.forEach(function (a) {
+                    payload.attendees.push({
+                        name: a.displayName,
+                        email: a.email
+                    });
                 });
-            });
+            }
         }
         msg.data = ev;
         node.send(msg);
